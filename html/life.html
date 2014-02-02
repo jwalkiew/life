@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>LIFE</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<style type="text/css">
+			table { border-collapse: collapse;border: 1px solid #000; }
+			td { border-collapse: collapse;border: 1px solid #000; width: 6px; height: 6px; font-size: 4px; }
+			.live { background-color: #000; }
+			.dead { background-color: #fff; }
+			.control { margin-top: 10px; }
+			.legend td, .legend th { font-size: 12px; }
+			.description { width:200px; padding: 3px; }
+			.legend { margin-top: 10px; }
+			.colour { width: 20px; height: 20px; }
+			.info { margin-top: 10px; font-size: 12px; }
+		</style>
+	</head>
+	<body>
+
+		<div id="content">
+		</div>
+		
+		<div id="control" class="control">
+			Mode:
+			<select id="modes">
+			</select>
+			<button id="buttonStart">Start</button>
+			<button id="buttonPause">Pause</button>
+			<button id="buttonClear">Clear</button>
+		</div>
+		
+		<div id="legend" class="legend">
+			<table>
+				<tr>
+					<th colspan="2">Description</th>
+				</tr>
+				<tr>
+					<td class="colour dead">
+					</td>
+					<td class="description">
+						Dead
+					</td>
+				</tr>
+				<tr>
+					<td class="colour live">
+					</td>
+					<td class="description">
+						Live
+					</td>
+				</tr>
+			</table>
+		</div>
+		
+		<div class="info">
+			<a href="http://en.wikipedia.org/wiki/Conway%27s_Game_of_Life">Conway's Game of Life</a> | @2014 jwalkiew
+		</div>
+
+		<script type="text/javascript">
+			var game;
+			var config;
+			
+			var modeConfigs = [
+				{
+					description : 'Classic',
+					config : {
+						rules: '23/3', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 10000
+					}
+				}, {
+					description : 'Seeds',
+					config : {
+						rules: '/2', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 1000
+					}
+				}, {
+					description : 'Doilies',
+					config : {
+						rules: '/234', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 100
+					}
+				}, {
+					description : 'Labyrinth',
+					config : {
+						rules: '12345/3', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 700
+					}
+				}, {
+					description : 'Replicator',
+					config : {
+						rules: '1357/1357', 
+						width: 160, 
+						height: 80, 
+						frequency: 500, 
+						initNr: 1
+					}
+				}, {
+					description : 'Amoeba',
+					config : {
+						rules: '1358/357', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 2800
+					}
+				}, {
+					description : 'Cities surrounded by a wall',
+					config : {
+						rules: '2345/45678', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 3200
+					}
+				}, {
+					description : 'Day and night',
+					config : {
+						rules: '34678/3678', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 7000
+					}
+				}, {
+					description : 'Diamoeba',
+					config : {
+						rules: '5678/35678', 
+						width: 160, 
+						height: 80, 
+						frequency: 100, 
+						initNr: 9000
+					}
+				}
+			];
+			
+			var modesSelectBoxId = 'modes';
+		
+			document.body.onload = function() {
+				if(window.location.hash == '')
+					index = 0;
+				else
+					index = window.location.hash.substring(1);
+				
+				config = modeConfigs[index].config;
+				
+				var modesSelectBox = document.getElementById(modesSelectBoxId);
+				
+				for(currentIndex in modeConfigs)
+					modesSelectBox.options[modesSelectBox.options.length] = new Option(modeConfigs[currentIndex].description, currentIndex, false, currentIndex == index);
+				
+				game = life(config);
+				game.start();
+			}
+			
+			var getSelectedOptionIndex = function(elementId) {
+				var element = document.getElementById(elementId);
+				if (element.selectedIndex == -1)
+					return 0;
+				return element.options[element.selectedIndex].value;			
+			}
+			
+			document.getElementById(modesSelectBoxId).onchange = function() {
+				var index = getSelectedOptionIndex(modesSelectBoxId);
+				config = modeConfigs[index].config;
+				
+				if(game.isRunning()) {
+					game.pause();					
+					game = life(config);
+					game.start();
+				} else		
+					game = life(config);
+
+				window.location.hash = '#' + index;
+			}
+		
+			document.getElementById('buttonStart').onclick = function() {					
+				game.start();
+			}
+			
+			document.getElementById('buttonPause').onclick = function() {
+				game.pause();
+			}
+			
+			document.getElementById('buttonClear').onclick = function() {
+				game.pause();
+				game = life(config);
+			}
+		
+		
+			var life = function(config) {
+				var rules = config.rules; 
+				var width = config.width; 
+				var height = config.height;
+				var frequency = config.frequency;
+				var initNr = config.initNr;
+				
+				var interval = '';			
+				var matrix;
+				
+				var point = function(xx, yy) {
+					return {
+						x: xx,
+						y: yy
+					};
+				}
+				
+				var init = function() {
+					matrix = new Array(height);
+					for(var i = 0; i < height; i++)
+						matrix[i] = new Array(width);
+					clear();
+				}
+				
+				var clear = function() {
+					for(var i = 0; i < height; i++)
+						for(var j = 0; j < width; j++)
+							matrix[i][j] = false;
+				}
+				
+				var setActiveCells = function(points) {
+					for(index in points) {
+						x = points[index].x;
+						y = points[index].y;	
+						if(x >= 0 && x < width && y >= 0 && y < height)
+							matrix[y][x] = true;
+					}
+				}
+				
+				var getInitPoints = function() {		
+					points = [];
+							
+					for(var i = 0; i < initNr; i++) {
+						var x = Math.floor(Math.random() * width);
+						var y = Math.floor(Math.random() * height);
+						var currentPoint = point(x, y);
+						points.push(currentPoint);
+					}
+					
+					return points;
+				}
+				
+				var getNextPoints = function() {
+					var points = [];
+					
+					for(var i = 0; i < height; i++)
+						for(var j = 0; j < width; j++)
+							if(getNextState(matrix[i][j], j, i))
+								points.push(point(j, i));
+					
+					return points;
+				}
+				
+				var inArray = function (item, array) {
+					for(index in array)
+						if(array[index] == item)
+							return true;
+					return false;
+				}
+				
+				var getNextState = function(actualState, x, y) {
+					var nrOfLives = 0;
+					
+					for(var i = y - 1; i <= y + 1; i++)
+						for(var j = x - 1; j <= x + 1; j++) {
+							var currentX = j;
+							var currentY = i;
+							
+							if(!(currentX == x && currentY == y) && currentX >= 0 && currentX < width && currentY >= 0 && currentY < height && matrix[currentY][currentX] == true)
+								nrOfLives++;
+						}
+						
+					var rulesAsArray = rules.split('/');
+					
+					if((actualState == true && inArray(nrOfLives, rulesAsArray[0].split(''))) || (actualState == false && inArray(nrOfLives, rulesAsArray[1].split(''))))
+						return true;
+					
+					return false;
+				}
+				
+				var drawPlane = function() {
+					var str = '<table>'
+					for(var i = 0; i < matrix.length; i++) {
+						str += '<tr>';
+						for(var j = 0; j < matrix[i].length; j++)
+							str += '<td class="' + (matrix[i][j] ? "live" : "dead") + '" id="cell-' + j + '-' + i + '">&nbsp;</td>';
+						str += '</tr>';
+					}
+					
+					str += '</table>';
+					
+					document.getElementById('content').innerHTML = str;
+				}
+					
+				var print = function() {
+					for(var i = 0; i < matrix.length; i++)
+						for(var j = 0; j < matrix[i].length; j++)
+							document.getElementById('cell-' + j + '-' + i).setAttribute("class", (matrix[i][j] ? "live" : "dead"));
+				}
+				
+				var next = function() {
+					clear();
+					setActiveCells(nextPoints);
+					print();
+					nextPoints = getNextPoints();
+				}
+				
+				isRunning = function() {
+					return interval != '';
+				}
+				
+				start = function() {
+					if(isRunning())
+						return;
+					
+					interval = setInterval(next, frequency);
+				}
+				
+				pause = function() {
+					if(!isRunning())
+						return;
+						
+					clearInterval(interval);
+					interval = '';
+				}
+			
+				var nextPoints = getInitPoints();
+				init();
+				drawPlane();
+				
+				return this;
+			}
+		</script>
+
+	</body>
+</html>
